@@ -1,25 +1,179 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Activity Monitoring (Steps)"
+output: html_document
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
-## Loading and preprocessing the data
+Reproducible Research Course Project 1
+
+It is now possible to collect a large amount of data about personal movement using activity monitoring devices such as a Fitbit, Nike Fuelband, or Jawbone Up. These type of devices are part of the “quantified self” movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. But these data remain under-utilized both because the raw data are hard to obtain and there is a lack of statistical methods and software for processing and interpreting the data.
+
+This assignment makes use of data from a personal activity monitoring device. This device collects data at 5 minute intervals through out the day. The data consists of two months of data from an anonymous individual collected during the months of October and November, 2012 and include the number of steps taken in 5 minute intervals each day.
+
+### Including Plots
+
+1.Load the data
+```{r message = FALSE}
+library(ggplot2)
+library(dplyr)
+
+currentdir <- "D:/Coursera/Github/RepData_PeerAssessment1/data"
+setwd(currentdir)
+activityraw <- read.csv("activity.csv")
+```
 
 
+2.Process/transform the data
 
-## What is mean total number of steps taken per day?
+```{r}
+dates <- strptime(activityraw$date, "%Y-%m-%d")
+activityraw$date <- dates
+```
+
+### What is mean total number of steps taken per day?
+
+1.Calculate the total number of steps taken per day
+```{r}
+rawsplit <- split(activityraw$steps, dates$yday)
+totalStepsPerDay <- sapply(rawsplit, sum, na.rm=TRUE)
+uniquedates <- unique(activityraw$date)
+```
+2.Create a histogram of the total number of steps taken each day
+```{r echo = TRUE}
+plot(uniquedates, totalStepsPerDay, main = "Step per Day Histogram", xlab = "Date", ylab = "Frequency", type= "h", lwd = 5, col = "orange")
+```
+
+### 3.Calculate and report the mean and median of the total number of steps taken per day
+
+The mean steps per day
+```{r}
+meanStepsPerDay <- sapply(rawsplit, mean, na.rm = TRUE)
+meanDataFrame <- data.frame(date=uniquedates, meanStepsPerDay=meanStepsPerDay, row.names=NULL)
+```
+
+The median steps per day
+
+```{r}
+medianStepsPerDay <- sapply(rawsplit, median, na.rm = TRUE)
+medianDataFrame <- data.frame(date=uniquedates, medianstepsperday=medianStepsPerDay, row.names=NULL)
+```
+
+1.Make a time series plot (i.e. type = “l”) of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+
+```{r}
+uniqueintervals <- unique(activityraw$interval)
+rawintervalsplit <- split(activityraw$steps, activityraw$interval)
+
+meanStepsPerInterval <- sapply(rawintervalsplit, mean, na.rm = TRUE)
+
+plot(uniqueintervals, meanStepsPerInterval, type="l",
+     main="Average number of steps per interval", 
+     xlab="Interval", ylab="Average # of steps", 
+     lwd=2, col="blue")
+
+maxIntervalDays <- max(meanStepsPerInterval, na.rm=TRUE)
+maxIndex <- as.numeric(which(meanStepsPerInterval == maxIntervalDays))
+
+maxInterval <- uniqueintervals[maxIndex]
+abline(v=maxInterval, col="black", lwd=3)
+```
+
+### 2.Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+
+1.Calculate and report the total number of missing values in the dataset
+
+```{r}
+sum(is.na(activityraw$steps))
+```
+
+2.Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.
+
+```{r message = FALSE, warning = FALSE}
+### Using Amelia package for imputing missing data in a data set
+
+library(Amelia)
+ameliafit <- amelia(activityraw, m = 1, idvars = "date")
+newactivityraw <- ameliafit$imputations[[1]]
+summary(newactivityraw)
+```
+
+Checking the total number of missing data after imputing
+```{r}
+sum(is.na(newactivityraw$steps))
+```
+
+3.Create a new dataset that is equal to the original dataset but with the missing data filled in.
+```{r}
+stepsSplitNew <- split(newactivityraw$steps, dates$yday)
+totalStepsPerDayNew <- sapply(stepsSplitNew, sum)
+```
 
 
+4.Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
 
-## What is the average daily activity pattern?
+```{r echo = FALSE}
+par(mfcol = c(2,1))
+plot(uniquedates, totalStepsPerDay, main = "Step per Day Histogram", xlab = "Date", ylab = "Frequency", type= "h", lwd = 5, col = "orange")
+plot(uniquedates, totalStepsPerDayNew, main = "Step per Day Histogram", xlab = "Date", ylab = "Frequency", type= "h", lwd = 5, col = "orange")
+```
 
+With this new data, let's calculate the mean over all days (like in Part 2). As a side-by-side comparison, we will place the data before imputing, as well as the new one in the same data frame.
 
+```{r}
+meanStepsPerDayNew <- sapply(stepsSplitNew, mean)
+meanDataFrameNew <- data.frame(date=uniquedates, meanStepsPerDay=meanStepsPerDay, 
+meanStepsPerDayNew=meanStepsPerDayNew, row.names=NULL)
+meanDataFrameNew
+```
 
-## Imputing missing values
+Like the above, the median steps per day are:
 
+```{r}
+medianStepsPerDayNew <- sapply(stepsSplitNew, median)
+medianDataFrameNew <- data.frame(date=uniquedates, medianStepsPerDay=medianStepsPerDay, 
+medianStepsPerDayNew=medianStepsPerDayNew, row.names=NULL)
+```
 
+### Are there differences in activity patterns between weekdays and weekends?
 
-## Are there differences in activity patterns between weekdays and weekends?
+1.Create a new factor variable in the dataset with two levels :weekdayây and weekendây indicating whether a given date is a weekday or weekend day.
+
+```{r}
+wdays <- dates$wday
+
+### Create a numeric vector with 2 levels - 1 is for a weekday, 2 for a weekend
+classifywday <- rep(0, length(wdays)-1)
+
+classifywday[wdays >= 1 & wdays <= 5] <- 1
+classifywday[wdays == 6 | wdays == 0] <- 2
+
+daysFactor <- factor(classifywday, levels=c(1,2), labels=c("Weekdays", "Weekends"))
+
+newactivityraw$typeOfDay <- daysFactor
+
+activityWeekdays <- newactivityraw[newactivityraw$typeOfDay == "Weekdays", ]
+activityWeekends <- newactivityraw[newactivityraw$typeOfDay == "Weekends", ]
+```
+
+2.Make a panel plot containing a time series plot (i.e. type = “l”) of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). See the README file in the GitHub repository to see an example of what this plot should look like using simulated data
+
+```{r}
+activitySplitWeekdays <- split(activityWeekdays$steps, activityWeekdays$interval)
+activitySplitWeekends <- split(activityWeekends$steps, activityWeekends$interval)
+
+meanStepsPerWeekdayInterval <- sapply(activitySplitWeekdays, mean)
+meanStepsPerWeekendInterval <- sapply(activitySplitWeekends, mean)
+
+par(mfcol=c(2,1))
+plot(unique(newactivityraw$interval), meanStepsPerWeekdayInterval, type="l",
+main="Average number of steps per interval across all weekdays", 
+xlab="Interval", ylab="Steps", 
+lwd=2, col="red")
+plot(unique(newactivityraw$interval), meanStepsPerWeekendInterval, type="l",
+main="Average number of steps per interval across all weekends", 
+xlab="Interval", ylab="Steps", 
+lwd=2, col="blue")
+```
